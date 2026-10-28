@@ -37,10 +37,11 @@ resource "tls_private_key" "api" {
 resource "azurerm_linux_virtual_machine" "api" {
   #checkov:skip=CKV_AZURE_50:The VM needs the custom script/cloud-init path to bootstrap Ansible
   #checkov:skip=CKV2_AZURE_12:Backup not needed - the VM is rebuilt from code; data lives in PostgreSQL
-  name                  = "vm-${local.name}-api-01"
-  computer_name         = "${var.app_name}-api-01"
-  resource_group_name   = azurerm_resource_group.app.name
-  location              = azurerm_resource_group.app.location
+  name                = "vm-${local.name}-api-01"
+  computer_name       = "${var.app_name}-api-01"
+  resource_group_name = azurerm_resource_group.app.name
+  location            = azurerm_resource_group.app.location
+  # tflint-ignore: azurerm_linux_virtual_machine_retired_size
   size                  = var.api_vm_size
   admin_username        = "azureadmin"
   network_interface_ids = [azurerm_network_interface.api.id]

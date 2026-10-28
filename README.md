@@ -66,7 +66,7 @@ Prerequisites in the landing zone repo: the prod landing zone is onboarded, and 
 |---|---|
 | Container Apps (consumption, scales to zero) | about £0 within the free grant |
 | ACR Basic | about £4 |
-| VM B2ats v2 + 30 GB disk | about £6 + £2 (free for 12 months on new accounts) |
+| VM B1s + 30 GB disk | about £7 + £2 (free for 12 months on new accounts) |
 | PostgreSQL B1ms + 32 GB | about £13 (free for 12 months on new accounts) |
 | Private endpoint | about £6 |
 | Storage (config bundles) | pennies |

@@ -39,7 +39,7 @@ resource "azurerm_storage_account" "deploy" {
 
 resource "azurerm_storage_container" "deploy" {
   #checkov:skip=CKV2_AZURE_21:Blob logs go to the central Log Analytics workspace through the landing zone's diagnostic settings policy
-  name                 = "deploy"
+  name                  = "deploy"
   storage_account_id    = azurerm_storage_account.deploy.id
   container_access_type = "private"
 }
