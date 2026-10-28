@@ -70,13 +70,11 @@ variable "frontend_port" {
 
 variable "api_vm_size" {
   description = <<-EOT
-    B1s: 1 vCPU, 1 GiB, free-tier eligible. New subscriptions get default
-    quota for the original B-series but 0 for the v2 B-series (Basv2 etc.),
-    which would need a quota request. B1s is announced for retirement, so
-    move to a v2 size once quota is in place.
+    B2pts v2: 2 vCPU (Arm64), 1 GiB, ~GBP 6/month in East Asia. Arm64 sizes
+    need the Arm64 image (see api.tf); the subscription has Bpsv2 quota there.
   EOT
   type        = string
-  default     = "Standard_B1s"
+  default     = "Standard_B2pts_v2"
 }
 
 variable "api_port" {

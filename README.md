@@ -8,7 +8,7 @@ Internet ──HTTPS──► Frontend ───────────► API 
                     nginx in Docker        FastAPI, configured   private endpoint only,
                     snet-webapp-frontend   by Ansible            Entra ID auth only
                                            snet-webapp-api       snet-webapp-pe
-                    └──────────────── vnet-gw-prod-uks (spoke, peered to the hub) ─────┘
+                    └──────────────── vnet-gw-prod-eas (spoke, peered to the hub) ─────┘
 ```
 
 | Tier | Built with | Deployed by |
@@ -61,12 +61,12 @@ Prerequisites in the landing zone repo: the prod landing zone is onboarded, and 
 | API | Run command: `systemctl status webapp-api; curl -s localhost:8000/api/health/db` |
 | DNS registration | Private endpoint → *DNS configuration* should list `privatelink.postgres.database.azure.com` |
 
-## Cost (UK South, approx.)
+## Cost (East Asia, approx.)
 | Resource | Monthly |
 |---|---|
 | Container Apps (consumption, scales to zero) | about £0 within the free grant |
 | ACR Basic | about £4 |
-| VM B1s + 30 GB disk | about £7 + £2 (free for 12 months on new accounts) |
+| VM B2pts v2 (Arm64) + 30 GB disk | about £6 + £2 |
 | PostgreSQL B1ms + 32 GB | about £13 (free for 12 months on new accounts) |
 | Private endpoint | about £6 |
 | Storage (config bundles) | pennies |

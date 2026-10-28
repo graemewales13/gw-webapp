@@ -2,7 +2,7 @@
 
 app_name    = "webapp"
 environment = "prod"
-location    = "uksouth"
+location    = "eastasia"
 
 tags = {
   environment = "prod"
@@ -12,8 +12,8 @@ tags = {
 
 # Created by the landing zone platform (module.spoke_prod)
 spoke_vnet = {
-  name                = "vnet-gw-prod-uks"
-  resource_group_name = "rg-gw-prod-network-uks"
+  name                = "vnet-gw-prod-eas"
+  resource_group_name = "rg-gw-prod-network-eas"
 }
 
 # Inside the spoke's 10.1.0.0/16

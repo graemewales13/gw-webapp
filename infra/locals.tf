@@ -1,7 +1,7 @@
 locals {
   # gw-<app>-<env>, e.g. gw-webapp-prod
   name           = "gw-${var.app_name}-${var.environment}"
-  location_short = { uksouth = "uks", ukwest = "ukw" }[var.location]
+  location_short = { uksouth = "uks", ukwest = "ukw", eastasia = "eas" }[var.location]
 
   # The landing zone's Modify policy copies RG tags onto resources, so
   # every resource gets the same tags to avoid a permanent diff.
