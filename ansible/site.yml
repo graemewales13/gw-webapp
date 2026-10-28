@@ -1,0 +1,11 @@
+---
+# Applied on the API VM by /usr/local/bin/gw-apply-config (installed by
+# cloud-init): from the bundle CI uploads, every 15 minutes and on deploy.
+# Variables from Terraform: /etc/gw-webapp/vars.yml (passed with -e).
+- name: Configure API server
+  hosts: localhost
+  connection: local
+  become: true
+  roles:
+    - common
+    - api

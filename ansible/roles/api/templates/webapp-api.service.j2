@@ -1,0 +1,24 @@
+# Managed by Ansible (role api)
+[Unit]
+Description=gw-webapp API
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User={{ api_user }}
+Group={{ api_user }}
+EnvironmentFile=/etc/webapp-api.env
+WorkingDirectory={{ api_dir }}/app
+ExecStart={{ api_dir }}/venv/bin/uvicorn main:app --host 0.0.0.0 --port {{ api_port }} --proxy-headers --forwarded-allow-ips "*"
+Restart=on-failure
+RestartSec=10
+
+# Hardening: read-only filesystem, no privilege escalation
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+
+[Install]
+WantedBy=multi-user.target

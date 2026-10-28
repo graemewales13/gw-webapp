@@ -1,0 +1,52 @@
+# Enforces the branch and PR title conventions in CONTRIBUTING.md.
+# PRs are squash-merged, so the PR title becomes the commit message on
+# main - that's why the title format matters more than branch commits.
+name: pr-conventions
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  conventions:
+    name: branch name and PR title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch name and PR title
+        # Untrusted input is passed via env vars, never interpolated into
+        # the script, so a crafted PR title can't inject shell commands.
+        env:
+          BRANCH: ${{ github.head_ref }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types='feat|fix|docs|ci|chore|refactor|test|perf|build|revert'
+          ok=true
+
+          # Dependabot names its own branches (dependabot/<ecosystem>/...);
+          # its titles are still checked, using the prefixes in dependabot.yml.
+          bot=false
+          [[ "$BRANCH" == dependabot/* ]] && bot=true
+
+          if ! $bot && [[ ! "$BRANCH" =~ ^($types)/[a-z0-9][a-z0-9._-]*$ ]]; then
+            echo "::error::Branch '$BRANCH' must be <type>/<short-name>, e.g. feat/add-search (types: ${types//|/, }; lowercase, digits, . _ -)."
+            ok=false
+          fi
+
+          if [[ ! "$TITLE" =~ ^($types)(\([a-z0-9-]+\))?!?:\ [^[:space:]].{0,99}$ ]]; then
+            echo "::error::PR title '$TITLE' must follow Conventional Commits: <type>(<optional scope>): <summary>, e.g. 'feat(api): add item search'."
+            ok=false
+          fi
+
+          branch_type="${BRANCH%%/*}"
+          title_type="${TITLE%%[(:!]*}"
+          if $ok && ! $bot && [[ "$branch_type" != "$title_type" ]]; then
+            echo "::error::Branch type '$branch_type' doesn't match PR title type '$title_type'. Rename one so they agree."
+            ok=false
+          fi
+
+          $ok && echo "Branch '$BRANCH' and title '$TITLE' follow the conventions."
+          $ok

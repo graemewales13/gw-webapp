@@ -1,0 +1,81 @@
+#cloud-config
+# Rendered by Terraform (api.tf). Installs Ansible and a systemd timer
+# that applies the latest config bundle:
+#   CI (.github/workflows/api.yml) uploads ansible/ + api/ as a tarball
+#   to the deploy storage account; gw-config downloads it with the VM's
+#   managed identity and runs ansible-playbook locally.
+package_update: true
+packages:
+  - ansible
+  - curl
+
+write_files:
+  - path: /etc/gw-webapp/config-source.env
+    permissions: "0644"
+    content: |
+      BUNDLE_URL=${bundle_url}
+      AZURE_CLIENT_ID=${client_id}
+
+  # Values from Terraform for the playbook (no secrets - auth is by
+  # managed identity)
+  - path: /etc/gw-webapp/vars.yml
+    permissions: "0644"
+    content: |
+      ${indent(6, app_vars)}
+
+  - path: /usr/local/bin/gw-apply-config
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      # Download the config bundle with the VM's managed identity, then
+      # apply it. Always applies, so manual changes are put back.
+      set -euo pipefail
+      # shellcheck source=/dev/null
+      source /etc/gw-webapp/config-source.env
+
+      token=$(curl -sSf -H Metadata:true \
+        "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://storage.azure.com/&client_id=$AZURE_CLIENT_ID" \
+        | python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')
+
+      work=$(mktemp -d)
+      trap 'rm -rf "$work"' EXIT
+      curl -sSf -H "Authorization: Bearer $token" -H "x-ms-version: 2023-11-03" \
+        -o "$work/bundle.tar.gz" "$BUNDLE_URL"
+
+      mkdir "$work/src"
+      tar -xzf "$work/bundle.tar.gz" -C "$work/src"
+      rm -rf /opt/gw-webapp-src
+      mv "$work/src" /opt/gw-webapp-src
+
+      ansible-playbook --inventory localhost, --connection local \
+        --extra-vars @/etc/gw-webapp/vars.yml /opt/gw-webapp-src/ansible/site.yml
+
+  - path: /etc/systemd/system/gw-config.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Apply the gw-webapp config bundle
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/gw-apply-config
+
+  - path: /etc/systemd/system/gw-config.timer
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Apply the gw-webapp config bundle every 15 minutes
+
+      [Timer]
+      OnBootSec=2min
+      OnUnitActiveSec=15min
+      RandomizedDelaySec=1min
+
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, --now, gw-config.timer]

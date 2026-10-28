@@ -1,0 +1,51 @@
+---
+- name: Create service user
+  ansible.builtin.user:
+    name: "{{ api_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+# playbook_dir is ansible/ in the extracted bundle; the API code
+# lives next to it in api/.
+- name: Copy API code
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../api/"
+    dest: "{{ api_dir }}/app/"
+    owner: root
+    group: root
+    mode: "0644"
+    directory_mode: "0755"
+  notify: Restart API
+
+- name: Install Python dependencies
+  ansible.builtin.pip:
+    requirements: "{{ api_dir }}/app/requirements.txt"
+    virtualenv: "{{ api_dir }}/venv"
+    virtualenv_command: python3 -m venv
+  notify: Restart API
+
+- name: Write API environment file
+  ansible.builtin.template:
+    src: webapp-api.env.j2
+    dest: /etc/webapp-api.env
+    owner: root
+    group: "{{ api_user }}"
+    mode: "0640"
+  notify: Restart API
+
+- name: Install systemd unit
+  ansible.builtin.template:
+    src: webapp-api.service.j2
+    dest: /etc/systemd/system/webapp-api.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart API
+
+- name: Enable and start API
+  ansible.builtin.systemd_service:
+    name: webapp-api
+    enabled: true
+    state: started
+    daemon_reload: true

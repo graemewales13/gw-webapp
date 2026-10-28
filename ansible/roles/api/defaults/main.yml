@@ -1,0 +1,6 @@
+---
+api_port: 8000
+api_user: webapp
+api_dir: /opt/webapp-api
+# Required (from Terraform via /etc/gw-webapp/vars.yml):
+# db_host, db_name, db_user, azure_client_id

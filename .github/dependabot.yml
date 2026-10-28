@@ -1,0 +1,34 @@
+# Same policy as the landing zone repo: weekly, 14-day cooldown,
+# minor/patch grouped, Conventional Commit prefixes.
+version: 2
+
+updates:
+  - package-ecosystem: "terraform"
+    directory: "/infra"
+    schedule: { interval: "weekly", day: "monday", time: "06:00", timezone: "Europe/London" }
+    cooldown: { default-days: 14 }
+    groups:
+      terraform-providers: { update-types: ["minor", "patch"] }
+    commit-message: { prefix: "chore", include: "scope" }
+
+  - package-ecosystem: "pip"
+    directory: "/api"
+    schedule: { interval: "weekly", day: "monday", time: "06:00", timezone: "Europe/London" }
+    cooldown: { default-days: 14 }
+    groups:
+      python: { update-types: ["minor", "patch"] }
+    commit-message: { prefix: "chore", include: "scope" }
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule: { interval: "weekly", day: "monday", time: "06:00", timezone: "Europe/London" }
+    cooldown: { default-days: 14 }
+    commit-message: { prefix: "chore", include: "scope" }
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule: { interval: "weekly", day: "monday", time: "06:00", timezone: "Europe/London" }
+    cooldown: { default-days: 14 }
+    groups:
+      github-actions: { update-types: ["minor", "patch"] }
+    commit-message: { prefix: "ci", include: "scope" }

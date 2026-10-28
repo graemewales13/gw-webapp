@@ -1,0 +1,36 @@
+#==============================================================
+# Identity for GitHub Actions. OIDC federation, no secrets. Only
+# workflows on the deploy branch can use it.
+#   frontend.yml: push images to ACR, roll the container app
+#   api.yml:      upload the config bundle, tell the VM to apply it
+#==============================================================
+
+resource "azurerm_user_assigned_identity" "github" {
+  name                = "id-${local.name}-github-${local.location_short}"
+  resource_group_name = azurerm_resource_group.app.name
+  location            = azurerm_resource_group.app.location
+  tags                = local.tags
+}
+
+resource "azurerm_federated_identity_credential" "github" {
+  name                = "github-${var.github_branch}"
+  resource_group_name = azurerm_resource_group.app.name
+  parent_id           = azurerm_user_assigned_identity.github.id
+  audience            = ["api://AzureADTokenExchange"]
+  issuer              = "https://token.actions.githubusercontent.com"
+  subject             = "repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"
+}
+
+resource "azurerm_role_assignment" "github" {
+  for_each = {
+    acr_push = { scope = azurerm_container_registry.this.id, role = "AcrPush" }
+    app      = { scope = azurerm_container_app.frontend.id, role = "Contributor" }
+    env_read = { scope = azurerm_container_app_environment.this.id, role = "Reader" }
+    bundle   = { scope = azurerm_storage_container.deploy.id, role = "Storage Blob Data Contributor" }
+    api_vm   = { scope = azurerm_linux_virtual_machine.api.id, role = "Virtual Machine Contributor" } # Run Command
+  }
+  scope                = each.value.scope
+  role_definition_name = each.value.role
+  principal_id         = azurerm_user_assigned_identity.github.principal_id
+  principal_type       = "ServicePrincipal"
+}

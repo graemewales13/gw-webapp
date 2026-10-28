@@ -1,0 +1,58 @@
+# Publish the API config bundle (ansible/ + api/) and apply it on the VM.
+# The VM also re-applies the latest bundle every 15 minutes by itself;
+# Run Command here just makes a deploy take effect straight away.
+# Signs in to Azure with OIDC as the identity in infra/github-oidc.tf.
+#
+# Repository variables (values from `terraform output github_actions_variables`):
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
+#   STORAGE_ACCOUNT, API_VM_NAME, RESOURCE_GROUP
+name: api
+
+on:
+  push:
+    branches: [main]
+    paths: ["api/**", "ansible/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # OIDC token for Azure
+
+concurrency:
+  group: api-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: publish bundle, apply on VM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: azure/login@053f7285eb20bf5469ef084617b0b24d3cec53fc # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Publish bundle
+        env:
+          STORAGE_ACCOUNT: ${{ vars.STORAGE_ACCOUNT }}
+        run: |
+          tar -czf api-bundle.tar.gz ansible api
+          az storage blob upload --auth-mode login --account-name "$STORAGE_ACCOUNT" \
+            --container-name deploy --name api-bundle.tar.gz --file api-bundle.tar.gz \
+            --overwrite --metadata "commit=$GITHUB_SHA" --output none
+
+      - name: Apply on the VM
+        env:
+          API_VM_NAME: ${{ vars.API_VM_NAME }}
+          RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+        run: |
+          out=$(az vm run-command invoke --resource-group "$RESOURCE_GROUP" --name "$API_VM_NAME" \
+            --command-id RunShellScript \
+            --scripts "systemctl start gw-config.service && echo DEPLOY_OK; journalctl -u gw-config.service -n 15 --no-pager" \
+            --query "value[0].message" -o tsv)
+          echo "$out"
+          { echo '```'; echo "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          grep -q DEPLOY_OK <<<"$out"

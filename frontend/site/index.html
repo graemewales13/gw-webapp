@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>gw-webapp</title>
+  <style>
+    :root { --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #5d6675; --ok: #1f7a4d; --bad: #b3261e; --line: #dfe3ea; --accent: #2457c5; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #14171c; --card: #1d2128; --text: #e7eaf0; --muted: #9aa3b2; --ok: #5ccf8f; --bad: #ff8a80; --line: #2d333d; --accent: #7aa2ff; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
+    h1 { margin: 0 0 4px; font-size: 1.6rem; }
+    p.lead { margin: 0 0 24px; color: var(--muted); }
+    section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
+    h2 { font-size: 1rem; margin: 0 0 12px; }
+    .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    .tier { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+    .tier b { display: block; }
+    .tier span { font-size: .85rem; color: var(--muted); word-break: break-word; }
+    .ok { color: var(--ok); } .bad { color: var(--bad); }
+    form { display: flex; gap: 8px; margin-bottom: 12px; }
+    input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
+    button { padding: 8px 14px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+    li time { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>gw-webapp</h1>
+  <p class="lead">Test three-tier app: Container Apps &rarr; Linux VM &rarr; PostgreSQL, all on the gw-apps-prod spoke.</p>
+
+  <section>
+    <h2>Tiers</h2>
+    <div class="tiers">
+      <div class="tier"><b class="ok">Frontend &#10003;</b><span>nginx on Azure Container Apps</span></div>
+      <div class="tier"><b id="api-status">API &hellip;</b><span id="api-detail">checking</span></div>
+      <div class="tier"><b id="db-status">Database &hellip;</b><span id="db-detail">checking</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Items</h2>
+    <form id="add">
+      <input id="name" maxlength="100" placeholder="Add an item" required aria-label="Item name">
+      <button type="submit">Add</button>
+    </form>
+    <ul id="items"></ul>
+  </section>
+</main>
+<script>
+  async function check(url, statusId, detailId, label, detail) {
+    const status = document.getElementById(statusId), info = document.getElementById(detailId);
+    try {
+      const res = await fetch(url);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.detail || res.status);
+      status.textContent = label + " ✓"; status.className = "ok";
+      info.textContent = detail(body);
+    } catch (err) {
+      status.textContent = label + " ✗"; status.className = "bad";
+      info.textContent = String(err.message || err);
+    }
+  }
+
+  async function loadItems() {
+    const list = document.getElementById("items");
+    try {
+      const res = await fetch("/api/items");
+      if (!res.ok) throw new Error(res.status);
+      const items = await res.json();
+      list.replaceChildren(...items.map(item => {
+        const li = document.createElement("li");
+        const name = document.createElement("span");
+        const when = document.createElement("time");
+        name.textContent = item.name;
+        when.textContent = new Date(item.created_at).toLocaleString();
+        li.append(name, when);
+        return li;
+      }));
+    } catch (err) {
+      list.textContent = "Couldn't load items: " + (err.message || err);
+    }
+  }
+
+  document.getElementById("add").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("name");
+    await fetch("/api/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: input.value }),
+    });
+    input.value = "";
+    loadItems();
+  });
+
+  check("/api/health", "api-status", "api-detail", "API", b => "Linux VM " + b.host);
+  check("/api/health/db", "db-status", "db-detail", "Database", b => b.version.split(" on ")[0]);
+  loadItems();
+</script>
+</body>
+</html>

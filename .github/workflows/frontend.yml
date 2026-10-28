@@ -1,0 +1,56 @@
+# Build the frontend image, push it to ACR and roll the container app.
+# Signs in to Azure with OIDC as the identity in infra/github-oidc.tf,
+# which only trusts this repo's main branch. No secrets are stored.
+#
+# Repository variables (values from `terraform output github_actions_variables`):
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
+#   ACR_NAME, CONTAINER_APP_NAME, RESOURCE_GROUP
+# (Roles are scoped in infra/github-oidc.tf.)
+name: frontend
+
+on:
+  push:
+    branches: [main]
+    paths: ["frontend/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # OIDC token for Azure
+
+concurrency:
+  group: frontend-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: build, push, deploy
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ${{ vars.ACR_NAME }}.azurecr.io/frontend:${{ github.sha }}
+      AZURE_EXTENSION_USE_DYNAMIC_INSTALL: yes_without_prompt # containerapp extension
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: azure/login@053f7285eb20bf5469ef084617b0b24d3cec53fc # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+        run: |
+          az acr login --name "$ACR_NAME"
+          docker build --pull -t "$IMAGE" frontend
+          docker push "$IMAGE"
+
+      - name: Deploy to Container Apps
+        env:
+          CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
+          RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+        run: |
+          az containerapp update --name "$CONTAINER_APP_NAME" --resource-group "$RESOURCE_GROUP" --image "$IMAGE" --output none
+          fqdn=$(az containerapp show --name "$CONTAINER_APP_NAME" --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+          echo "Deployed $IMAGE to https://$fqdn" >> "$GITHUB_STEP_SUMMARY"
