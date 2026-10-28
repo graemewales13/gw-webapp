@@ -69,9 +69,14 @@ variable "frontend_port" {
 }
 
 variable "api_vm_size" {
-  description = "B2ats v2: 2 vCPU, 1 GiB. Free-tier eligible; B1s is being retired."
+  description = <<-EOT
+    B1s: 1 vCPU, 1 GiB, free-tier eligible. New subscriptions get default
+    quota for the original B-series but 0 for the v2 B-series (Basv2 etc.),
+    which would need a quota request. B1s is announced for retirement, so
+    move to a v2 size once quota is in place.
+  EOT
   type        = string
-  default     = "Standard_B2ats_v2"
+  default     = "Standard_B1s"
 }
 
 variable "api_port" {
