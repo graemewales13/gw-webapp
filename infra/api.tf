@@ -52,8 +52,12 @@ resource "azurerm_linux_virtual_machine" "api" {
     public_key = tls_private_key.api.public_key_openssh
   }
 
+  # The user-assigned identity is the app's (storage, PostgreSQL). The
+  # system-assigned one is for the landing zone's guest configuration
+  # policies, which add it if it's missing; declaring it stops Terraform
+  # removing it on every run. It's given no roles here.
   identity {
-    type         = "UserAssigned"
+    type         = "SystemAssigned, UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.api.id]
   }
 
