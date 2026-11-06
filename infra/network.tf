@@ -161,5 +161,11 @@ resource "azapi_resource" "subnet" {
   # Azure allows one subnet change on a VNet at a time.
   locks = [data.azurerm_virtual_network.spoke.id]
 
+  # After a destroy removes the Container Apps environment, Azure takes a
+  # few minutes to release its hold on the frontend subnet.
+  retry = {
+    error_message_regex = ["InUseSubnetCannotBeDeleted", "AnotherOperationInProgress"]
+  }
+
   response_export_values = []
 }

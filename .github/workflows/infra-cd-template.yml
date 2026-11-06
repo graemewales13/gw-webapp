@@ -1,7 +1,7 @@
-# Plans one environment's infrastructure, then applies that exact plan.
-# Both jobs run in the GitHub environment of the same name, so they sign in
-# as that landing zone's deploy identity (OIDC, no secrets) and use its
-# state account. The environment only allows main.
+# Plans one environment's infrastructure (or its destruction), then applies
+# that exact plan. Both jobs run in the GitHub environment of the same name,
+# so they sign in as that landing zone's deploy identity (OIDC, no secrets)
+# and use its state account. The environment only allows main.
 name: infra-cd-template
 
 on:
@@ -11,6 +11,10 @@ on:
         description: "nonprod or prod: matches infra/environments/<name>.tfvars"
         required: true
         type: string
+      destroy:
+        description: "Plan and apply the destruction of everything instead"
+        default: false
+        type: boolean
       terraform_version:
         default: "1.16.5"
         type: string
@@ -61,8 +65,10 @@ jobs:
         id: plan
         run: |
           set +e
+          # shellcheck disable=SC2086
           terraform plan -input=false -out=tfplan -detailed-exitcode \
-            -var-file="environments/${{ inputs.environment }}.tfvars"
+            -var-file="environments/${{ inputs.environment }}.tfvars" \
+            ${{ inputs.destroy && '-destroy' || '' }}
           code=$?
           set -e
           if [ "$code" -eq 1 ]; then exit 1; fi
@@ -84,7 +90,7 @@ jobs:
             !infra/.terraform/**
 
   apply:
-    name: apply ${{ inputs.environment }}
+    name: ${{ inputs.destroy && 'destroy' || 'apply' }} ${{ inputs.environment }}
     needs: plan
     if: needs.plan.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
@@ -119,5 +125,41 @@ jobs:
             -backend-config="container_name=${{ vars.BACKEND_AZURE_STORAGE_ACCOUNT_CONTAINER_NAME }}" \
             -backend-config="key=${{ inputs.environment }}.tfstate"
 
-      - name: terraform apply
+      - name: azure login
+        if: inputs.destroy
+        uses: azure/login@053f7285eb20bf5469ef084617b0b24d3cec53fc # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # The landing zone's Deploy-VM-Backup policy puts a Recovery Services
+      # vault in the app's resource group and protects the VM. Terraform
+      # doesn't manage it, and a vault holding backups can't be deleted, so
+      # the resource group couldn't be either. Remove the backups (no soft
+      # delete: this environment is ephemeral) and the vault first.
+      - name: remove policy-created backup vaults
+        if: inputs.destroy
+        run: |
+          rg=$(terraform output -raw resource_group_name 2>/dev/null || true)
+          if [ -z "$rg" ] || ! az group exists --name "$rg" | grep -q true; then
+            echo "No resource group to clean up."; exit 0
+          fi
+          for vault in $(az resource list --resource-group "$rg" \
+                           --resource-type Microsoft.RecoveryServices/vaults --query "[].name" -o tsv); do
+            echo "Vault $vault"
+            az backup vault backup-properties set --resource-group "$rg" --name "$vault" \
+              --soft-delete-feature-state Disable --output none
+            az backup item list --resource-group "$rg" --vault-name "$vault" -o json \
+              | jq -r '.[] | "\(.properties.containerName) \(.name)"' \
+              | while read -r container item; do
+                  echo "  stopping backup and deleting data for $item"
+                  az backup protection disable --resource-group "$rg" --vault-name "$vault" \
+                    --container-name "$container" --item-name "$item" \
+                    --backup-management-type AzureIaasVM --delete-backup-data true --yes --output none
+                done
+            az backup vault delete --resource-group "$rg" --name "$vault" --force --yes
+          done
+
+      - name: terraform ${{ inputs.destroy && 'destroy' || 'apply' }}
         run: terraform apply -input=false -auto-approve tfplan
