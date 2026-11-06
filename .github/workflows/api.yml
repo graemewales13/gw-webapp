@@ -1,11 +1,12 @@
 # Publish the API config bundle (ansible/ + api/) and apply it on the VM.
 # The VM also re-applies the latest bundle every 15 minutes by itself;
 # Run Command here just makes a deploy take effect straight away.
-# Signs in to Azure with OIDC as the identity in infra/github-oidc.tf.
 #
-# Repository variables (values from `terraform output github_actions_variables`):
-#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
-#   STORAGE_ACCOUNT, API_VM_NAME, RESOURCE_GROUP
+# Runs in the nonprod GitHub environment (main only) and signs in with OIDC
+# as the narrow CI identity in infra/github-oidc.tf, not the landing zone's
+# deploy identity. Environment variables (set by the vending bootstrap):
+#   CI_AZURE_CLIENT_ID, AZURE_SUBSCRIPTION_ID, STORAGE_ACCOUNT,
+#   API_VM_NAME, RESOURCE_GROUP. Repository variable: AZURE_TENANT_ID.
 name: api
 
 on:
@@ -26,12 +27,13 @@ jobs:
   deploy:
     name: publish bundle, apply on VM
     runs-on: ubuntu-latest
+    environment: nonprod
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: azure/login@053f7285eb20bf5469ef084617b0b24d3cec53fc # v3.1.0
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          client-id: ${{ vars.CI_AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 

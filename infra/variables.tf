@@ -50,6 +50,11 @@ variable "spoke_vnet" {
   })
 }
 
+variable "postgres_private_dns_zone_id" {
+  description = "The platform's central privatelink.postgres.database.azure.com zone. A plain ID, so plans never need to read the connectivity subscription."
+  type        = string
+}
+
 variable "subnet_prefixes" {
   description = "Address ranges inside the spoke for this app's subnets."
   type = object({
@@ -109,10 +114,4 @@ variable "github_repository" {
     name     = string
     repo_id  = number
   })
-}
-
-variable "github_branch" {
-  description = "Branch CI deploys from. Only workflows on it can sign in to Azure."
-  type        = string
-  default     = "main"
 }

@@ -1,11 +1,11 @@
 # Build the frontend image, push it to ACR and roll the container app.
-# Signs in to Azure with OIDC as the identity in infra/github-oidc.tf,
-# which only trusts this repo's main branch. No secrets are stored.
 #
-# Repository variables (values from `terraform output github_actions_variables`):
-#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
-#   ACR_NAME, CONTAINER_APP_NAME, RESOURCE_GROUP
-# (Roles are scoped in infra/github-oidc.tf.)
+# Runs in the nonprod GitHub environment (main only) and signs in with OIDC
+# as the narrow CI identity in infra/github-oidc.tf, not the landing zone's
+# deploy identity. No secrets are stored. Environment variables (set by the
+# vending bootstrap):
+#   CI_AZURE_CLIENT_ID, AZURE_SUBSCRIPTION_ID, ACR_NAME,
+#   CONTAINER_APP_NAME, RESOURCE_GROUP. Repository variable: AZURE_TENANT_ID.
 name: frontend
 
 on:
@@ -26,6 +26,7 @@ jobs:
   deploy:
     name: build, push, deploy
     runs-on: ubuntu-latest
+    environment: nonprod
     env:
       IMAGE: ${{ vars.ACR_NAME }}.azurecr.io/frontend:${{ github.sha }}
       AZURE_EXTENSION_USE_DYNAMIC_INSTALL: yes_without_prompt # containerapp extension
@@ -34,7 +35,7 @@ jobs:
 
       - uses: azure/login@053f7285eb20bf5469ef084617b0b24d3cec53fc # v3.1.0
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          client-id: ${{ vars.CI_AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 

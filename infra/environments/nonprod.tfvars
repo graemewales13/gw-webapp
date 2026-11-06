@@ -22,6 +22,9 @@ spoke_vnet = {
   resource_group_name = "rg-apps-network-nonprod-eastasia-001"
 }
 
+# Platform-owned, in the connectivity subscription
+postgres_private_dns_zone_id = "/subscriptions/ce882887-4b87-4377-bc63-076ec3c22a85/resourceGroups/rg-connectivity-dns-prod-eastasia-001/providers/Microsoft.Network/privateDnsZones/privatelink.postgres.database.azure.com"
+
 # Inside the spoke's 10.0.4.0/22
 subnet_prefixes = {
   frontend          = "10.0.4.0/27"
