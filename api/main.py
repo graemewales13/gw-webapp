@@ -9,6 +9,7 @@ under /api/ because the frontend's nginx forwards /api/ here unchanged.
 """
 
 import os
+import socket
 
 import psycopg
 from azure.identity import ManagedIdentityCredential
@@ -18,7 +19,7 @@ from pydantic import BaseModel, Field
 DB_HOST = os.environ["DB_HOST"]
 DB_NAME = os.environ["DB_NAME"]
 DB_USER = os.environ["DB_USER"]
-TOKEN_SCOPE = "https://ossrdbms-aad.database.windows.net/.default"
+TOKEN_SCOPE = "https://ossrdbms-aad.database.windows.net/.default"  # nosec B105 - a public Entra scope, not a secret
 
 # The credential caches tokens (valid ~1 hour) and refreshes them itself
 credential = ManagedIdentityCredential(client_id=os.environ["AZURE_CLIENT_ID"])
@@ -68,7 +69,7 @@ def to_item(row: tuple) -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "tier": "api", "host": os.uname().nodename}
+    return {"status": "ok", "tier": "api", "host": socket.gethostname()}
 
 
 @app.get("/api/health/db")

@@ -70,7 +70,7 @@ variable "subnet_prefixes" {
 variable "frontend_bootstrap_image" {
   description = "Image the container app starts with (must listen on frontend_port). CI deploys the real image; Terraform ignores image changes afterwards."
   type        = string
-  default     = "docker.io/nginxinc/nginx-unprivileged:1.28-alpine"
+  default     = "docker.io/nginxinc/nginx-unprivileged:1.31-alpine"
 }
 
 variable "frontend_port" {

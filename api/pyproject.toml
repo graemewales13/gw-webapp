@@ -1,0 +1,17 @@
+# Tool settings only: the API isn't packaged.
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312" # Ubuntu 24.04's Python, as on the VM
+line-length = 120
+
+[tool.ruff.lint]
+# Defaults (pyflakes, pycodestyle errors) plus import order, bugbear and
+# pyupgrade.
+extend-select = ["I", "B", "UP"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]

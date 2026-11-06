@@ -1,0 +1,7 @@
+# CI only: tests and linters. Not installed on the VM (api.yml leaves this
+# file and tests/ out of the bundle).
+-r requirements.txt
+pytest==9.2.0
+httpx==0.28.1
+ruff==0.17.4
+bandit==1.9.4
