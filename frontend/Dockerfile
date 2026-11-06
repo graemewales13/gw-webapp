@@ -2,7 +2,7 @@
 # nginx-unprivileged runs as a non-root user and listens on 8080. Its
 # entrypoint runs envsubst on /etc/nginx/templates/*.template at start-up,
 # filling in API_UPSTREAM (set on the container app by Terraform).
-FROM nginxinc/nginx-unprivileged:1.28-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY site/ /usr/share/nginx/html/
