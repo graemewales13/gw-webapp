@@ -16,7 +16,10 @@ RestartSec=10
 # Hardening: read-only filesystem, no privilege escalation
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
+# tmpfs rather than true: home directories stay hidden, but as an empty
+# /home, so libpq's lookup of ~/.postgresql/postgresql.crt gets "not found"
+# and carries on instead of failing with "permission denied".
+ProtectHome=tmpfs
 PrivateTmp=true
 PrivateDevices=true
 
