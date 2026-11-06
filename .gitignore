@@ -1,4 +1,4 @@
-# Terraform (state lives in HCP Terraform)
+# Terraform (state lives in the landing zone's storage account)
 .terraform/
 *.tfstate
 *.tfstate.*

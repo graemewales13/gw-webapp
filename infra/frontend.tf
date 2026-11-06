@@ -13,7 +13,8 @@ resource "azurerm_container_registry" "this" {
   #checkov:skip=CKV_AZURE_167:Retention policy needs Premium SKU
   #checkov:skip=CKV_AZURE_233:Zone redundancy needs Premium SKU
   #checkov:skip=CKV_AZURE_237:Dedicated data endpoints need Premium SKU
-  name                = replace("acr${local.name}${local.location_short}", "-", "")
+  # Global name, letters and numbers only: cr<org><workload><env><###>
+  name                = "crgw${var.app_name}${var.environment}001"
   resource_group_name = azurerm_resource_group.app.name
   location            = azurerm_resource_group.app.location
   sku                 = "Basic"
@@ -22,7 +23,7 @@ resource "azurerm_container_registry" "this" {
 }
 
 resource "azurerm_user_assigned_identity" "frontend" {
-  name                = "id-${local.name}-frontend-${local.location_short}"
+  name                = "id-${var.app_name}-frontend-${local.suffix}"
   resource_group_name = azurerm_resource_group.app.name
   location            = azurerm_resource_group.app.location
   tags                = local.tags
@@ -36,13 +37,13 @@ resource "azurerm_role_assignment" "frontend_acr_pull" {
 }
 
 resource "azurerm_container_app_environment" "this" {
-  name                     = "cae-${local.name}-${local.location_short}"
+  name                     = "cae-${var.app_name}-${local.suffix}"
   location                 = azurerm_resource_group.app.location
   resource_group_name      = azurerm_resource_group.app.name
-  infrastructure_subnet_id = azurerm_subnet.frontend.id
+  infrastructure_subnet_id = azapi_resource.subnet["frontend"].id
 
-  # ME_ prefix: the landing zone's tag policy exempts Azure-managed RGs
-  infrastructure_resource_group_name = "ME_cae-${local.name}-${local.location_short}"
+  # ME_ prefix: Microsoft's convention for Azure-managed resource groups
+  infrastructure_resource_group_name = "ME_cae-${var.app_name}-${local.suffix}"
 
   workload_profile {
     name                  = "Consumption"
@@ -50,12 +51,10 @@ resource "azurerm_container_app_environment" "this" {
   }
 
   tags = local.tags
-
-  depends_on = [azurerm_subnet_network_security_group_association.frontend]
 }
 
 resource "azurerm_container_app" "frontend" {
-  name                         = "ca-${local.name}-frontend"
+  name                         = "ca-${var.app_name}-frontend-${var.environment}-001"
   container_app_environment_id = azurerm_container_app_environment.this.id
   resource_group_name          = azurerm_resource_group.app.name
   revision_mode                = "Single"

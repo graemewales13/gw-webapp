@@ -1,21 +1,19 @@
 terraform {
   required_version = ">= 1.6.0"
 
-  # Workspace, deployment identities and subscription_id are vended by
-  # the landing zone bootstrap (workload_workspaces).
-  cloud {
-    organization = "graemewales_org"
-
-    workspaces {
-      project = "apps"
-      name    = "gw-webapp-prod"
-    }
-  }
+  # State lives in the landing zone's own storage account, which vending
+  # creates. The workflow supplies the settings (one state file per
+  # environment) and signs in with Entra ID: no storage keys.
+  backend "azurerm" {}
 
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.0"
+      version = "~> 4.20"
+    }
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2.12"
     }
     tls = {
       source  = "hashicorp/tls"
@@ -25,15 +23,22 @@ terraform {
 }
 
 provider "azurerm" {
-  features {}
   subscription_id = var.subscription_id
 
-  # Register only what this app uses, not the provider's long default list
-  resource_provider_registrations = "core"
-  resource_providers_to_register = [
-    "Microsoft.App",
-    "Microsoft.ContainerRegistry",
-    "Microsoft.DBforPostgreSQL",
-    "Microsoft.OperationalInsights",
-  ]
+  # The providers this app uses are already registered in the landing zone,
+  # and the read-only plan identity couldn't register them anyway.
+  resource_provider_registrations = "none"
+
+  # Storage settings are read through Azure Resource Manager, so Terraform
+  # never needs storage account keys.
+  storage_use_azuread = true
+  features {
+    storage {
+      data_plane_available = false
+    }
+  }
+}
+
+provider "azapi" {
+  subscription_id = var.subscription_id
 }

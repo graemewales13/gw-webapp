@@ -1,29 +1,18 @@
 #==============================================================
-# Subnets in the platform-owned spoke VNet, one per tier, each with
-# its own NSG. Traffic flow allowed:
+# Subnets in the vended spoke VNet, one per tier, each with its own NSG.
+# Traffic flow allowed:
 #   Internet -> frontend :80/443 -> api :api_port -> postgres :5432
+#
+# The landing zone's Deny-Subnet-Without-Nsg policy refuses a subnet that
+# is created first and given its NSG afterwards, so each subnet is created
+# with its NSG in one request (azapi rather than azurerm_subnet).
 #==============================================================
 
 #--------------------------------------------------------------
 # Frontend: Container Apps environment (workload profiles)
 #--------------------------------------------------------------
-resource "azurerm_subnet" "frontend" {
-  name                 = "snet-${var.app_name}-frontend"
-  resource_group_name  = data.azurerm_virtual_network.spoke.resource_group_name
-  virtual_network_name = data.azurerm_virtual_network.spoke.name
-  address_prefixes     = [var.subnet_prefixes.frontend]
-
-  delegation {
-    name = "container-apps"
-    service_delegation {
-      name    = "Microsoft.App/environments"
-      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
-    }
-  }
-}
-
 resource "azurerm_network_security_group" "frontend" {
-  name                = "nsg-${local.name}-frontend-${local.location_short}"
+  name                = "nsg-${var.app_name}-frontend-${local.suffix}"
   location            = azurerm_resource_group.app.location
   resource_group_name = azurerm_resource_group.app.name
   tags                = local.tags
@@ -42,29 +31,11 @@ resource "azurerm_network_security_group" "frontend" {
   }
 }
 
-resource "azurerm_subnet_network_security_group_association" "frontend" {
-  subnet_id                 = azurerm_subnet.frontend.id
-  network_security_group_id = azurerm_network_security_group.frontend.id
-}
-
 #--------------------------------------------------------------
 # API: Linux VMs, reachable only from the frontend subnet
 #--------------------------------------------------------------
-resource "azurerm_subnet" "api" {
-  name                 = "snet-${var.app_name}-api"
-  resource_group_name  = data.azurerm_virtual_network.spoke.resource_group_name
-  virtual_network_name = data.azurerm_virtual_network.spoke.name
-  address_prefixes     = [var.subnet_prefixes.api]
-
-  # The VM has no public IP. It needs outbound internet for apt, pip and
-  # ansible-pull from GitHub. Default outbound access is free but being
-  # retired; production would use a NAT Gateway (~GBP 25/month) or the
-  # hub firewall.
-  default_outbound_access_enabled = true
-}
-
 resource "azurerm_network_security_group" "api" {
-  name                = "nsg-${local.name}-api-${local.location_short}"
+  name                = "nsg-${var.app_name}-api-${local.suffix}"
   location            = azurerm_resource_group.app.location
   resource_group_name = azurerm_resource_group.app.name
   tags                = local.tags
@@ -96,25 +67,11 @@ resource "azurerm_network_security_group" "api" {
   }
 }
 
-resource "azurerm_subnet_network_security_group_association" "api" {
-  subnet_id                 = azurerm_subnet.api.id
-  network_security_group_id = azurerm_network_security_group.api.id
-}
-
 #--------------------------------------------------------------
 # Private endpoints: PostgreSQL, reachable only from the API subnet
 #--------------------------------------------------------------
-resource "azurerm_subnet" "private_endpoints" {
-  name                              = "snet-${var.app_name}-pe"
-  resource_group_name               = data.azurerm_virtual_network.spoke.resource_group_name
-  virtual_network_name              = data.azurerm_virtual_network.spoke.name
-  address_prefixes                  = [var.subnet_prefixes.private_endpoints]
-  private_endpoint_network_policies = "Enabled" # lets the NSG apply to private endpoints
-  default_outbound_access_enabled   = false
-}
-
 resource "azurerm_network_security_group" "private_endpoints" {
-  name                = "nsg-${local.name}-pe-${local.location_short}"
+  name                = "nsg-${var.app_name}-pe-${local.suffix}"
   location            = azurerm_resource_group.app.location
   resource_group_name = azurerm_resource_group.app.name
   tags                = local.tags
@@ -144,7 +101,65 @@ resource "azurerm_network_security_group" "private_endpoints" {
   }
 }
 
-resource "azurerm_subnet_network_security_group_association" "private_endpoints" {
-  subnet_id                 = azurerm_subnet.private_endpoints.id
-  network_security_group_id = azurerm_network_security_group.private_endpoints.id
+#--------------------------------------------------------------
+# Subnets
+#--------------------------------------------------------------
+locals {
+  subnets = {
+    frontend = {
+      address_prefix = var.subnet_prefixes.frontend
+      nsg_id         = azurerm_network_security_group.frontend.id
+      delegation     = "Microsoft.App/environments"
+      # Container Apps and the VM need outbound internet (images, apt, pip).
+      # Default outbound access is free but being retired by Azure;
+      # production would use a NAT Gateway or the hub firewall.
+      default_outbound_access = true
+    }
+    api = {
+      address_prefix          = var.subnet_prefixes.api
+      nsg_id                  = azurerm_network_security_group.api.id
+      delegation              = null
+      default_outbound_access = true
+    }
+    pe = {
+      address_prefix          = var.subnet_prefixes.private_endpoints
+      nsg_id                  = azurerm_network_security_group.private_endpoints.id
+      delegation              = null
+      default_outbound_access = false
+    }
+  }
+}
+
+resource "azapi_resource" "subnet" {
+  for_each  = local.subnets
+  type      = "Microsoft.Network/virtualNetworks/subnets@2024-07-01"
+  name      = "snet-${var.app_name}-${each.key}-${local.suffix}"
+  parent_id = data.azurerm_virtual_network.spoke.id
+
+  body = {
+    properties = merge(
+      {
+        addressPrefix         = each.value.address_prefix
+        defaultOutboundAccess = each.value.default_outbound_access
+        networkSecurityGroup = {
+          id = each.value.nsg_id
+        }
+        # Lets the NSG apply to private endpoints in this subnet.
+        privateEndpointNetworkPolicies = "Enabled"
+      },
+      each.value.delegation == null ? {} : {
+        delegations = [{
+          name = "delegation"
+          properties = {
+            serviceName = each.value.delegation
+          }
+        }]
+      }
+    )
+  }
+
+  # Azure allows one subnet change on a VNet at a time.
+  locks = [data.azurerm_virtual_network.spoke.id]
+
+  response_export_values = []
 }

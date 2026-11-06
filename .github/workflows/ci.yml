@@ -1,5 +1,5 @@
-# Checks for every pull request. The Terraform plan itself comes from
-# HCP Terraform (posted as its own status check).
+# Checks for every pull request. Terraform plans and applies run in
+# infra-cd.yml from main; a plan on pull requests comes in a later change.
 #
 # Actions are pinned to full commit SHAs (tag in the comment).
 name: ci

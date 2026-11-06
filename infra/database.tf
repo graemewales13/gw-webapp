@@ -6,7 +6,7 @@
 
 resource "azurerm_postgresql_flexible_server" "this" {
   #checkov:skip=CKV_AZURE_136:Geo-redundant backups not available on Burstable SKU and not needed for a test app
-  name                          = "psql-${local.name}-${local.location_short}"
+  name                          = "psql-${var.app_name}-${local.suffix}"
   resource_group_name           = azurerm_resource_group.app.name
   location                      = azurerm_resource_group.app.location
   version                       = var.postgres_version
@@ -48,11 +48,11 @@ resource "azurerm_postgresql_flexible_server_active_directory_administrator" "ap
 }
 
 resource "azurerm_private_endpoint" "postgres" {
-  name                          = "pe-${local.name}-psql-${local.location_short}"
+  name                          = "pe-${var.app_name}-psql-${local.suffix}"
   location                      = azurerm_resource_group.app.location
   resource_group_name           = azurerm_resource_group.app.name
-  subnet_id                     = azurerm_subnet.private_endpoints.id
-  custom_network_interface_name = "nic-pe-${local.name}-psql-${local.location_short}"
+  subnet_id                     = azapi_resource.subnet["pe"].id
+  custom_network_interface_name = "nic-pe-${var.app_name}-psql-${local.suffix}"
   tags                          = local.tags
 
   private_service_connection {
@@ -62,8 +62,9 @@ resource "azurerm_private_endpoint" "postgres" {
     is_manual_connection           = false
   }
 
-  # The landing zone's DNS policy adds the zone group (and the A record
-  # in the central privatelink zone) a few minutes after creation.
+  # Not yet registered in the platform's central
+  # privatelink.postgres.database.azure.com zone: that DNS zone group is a
+  # follow-up change. Until then the API can't resolve the database.
   lifecycle {
     ignore_changes = [private_dns_zone_group]
   }

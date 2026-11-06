@@ -1,10 +1,8 @@
 locals {
-  # gw-<app>-<env>, e.g. gw-webapp-prod
-  name           = "gw-${var.app_name}-${var.environment}"
-  location_short = { uksouth = "uks", ukwest = "ukw" }[var.location]
+  # CAF: <type>-<workload>-<component>-<environment>-<region>-<###>,
+  # e.g. rg-webapp-nonprod-eastasia-001, vm-webapp-api-nonprod-eastasia-001
+  suffix = "${var.environment}-${var.location}-001"
 
-  # The landing zone's Modify policy copies RG tags onto resources, so
-  # every resource gets the same tags to avoid a permanent diff.
   tags = var.tags
 }
 
@@ -16,7 +14,7 @@ data "azurerm_virtual_network" "spoke" {
 }
 
 resource "azurerm_resource_group" "app" {
-  name     = "rg-${local.name}-${local.location_short}"
+  name     = "rg-${var.app_name}-${local.suffix}"
   location = var.location
   tags     = local.tags
 }

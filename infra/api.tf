@@ -8,21 +8,21 @@
 #==============================================================
 
 resource "azurerm_user_assigned_identity" "api" {
-  name                = "id-${local.name}-api-${local.location_short}"
+  name                = "id-${var.app_name}-api-${local.suffix}"
   resource_group_name = azurerm_resource_group.app.name
   location            = azurerm_resource_group.app.location
   tags                = local.tags
 }
 
 resource "azurerm_network_interface" "api" {
-  name                = "nic-${local.name}-api-${local.location_short}"
+  name                = "nic-${var.app_name}-api-${local.suffix}"
   location            = azurerm_resource_group.app.location
   resource_group_name = azurerm_resource_group.app.name
   tags                = local.tags
 
   ip_configuration {
     name                          = "ipconfig1"
-    subnet_id                     = azurerm_subnet.api.id
+    subnet_id                     = azapi_resource.subnet["api"].id
     private_ip_address_allocation = "Dynamic"
   }
 }
@@ -37,11 +37,10 @@ resource "tls_private_key" "api" {
 resource "azurerm_linux_virtual_machine" "api" {
   #checkov:skip=CKV_AZURE_50:The VM needs the custom script/cloud-init path to bootstrap Ansible
   #checkov:skip=CKV2_AZURE_12:Backup not needed - the VM is rebuilt from code; data lives in PostgreSQL
-  name                = "vm-${local.name}-api-01"
-  computer_name       = "${var.app_name}-api-01"
-  resource_group_name = azurerm_resource_group.app.name
-  location            = azurerm_resource_group.app.location
-  # tflint-ignore: azurerm_linux_virtual_machine_retired_size
+  name                  = "vm-${var.app_name}-api-${local.suffix}"
+  computer_name         = "${var.app_name}-api-01"
+  resource_group_name   = azurerm_resource_group.app.name
+  location              = azurerm_resource_group.app.location
   size                  = var.api_vm_size
   admin_username        = "azureadmin"
   network_interface_ids = [azurerm_network_interface.api.id]
@@ -59,15 +58,16 @@ resource "azurerm_linux_virtual_machine" "api" {
   }
 
   os_disk {
-    name                 = "osdisk-${local.name}-api-01"
+    name                 = "osdisk-${var.app_name}-api-${local.suffix}"
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"
   }
 
+  # Arm64 image, to match the Arm64 B2pts_v2 size.
   source_image_reference {
     publisher = "Canonical"
     offer     = "ubuntu-24_04-lts"
-    sku       = "server"
+    sku       = "server-arm64"
     version   = "latest"
   }
 
