@@ -8,12 +8,12 @@
 resource "azurerm_storage_account" "deploy" {
   #checkov:skip=CKV_AZURE_59:GitHub-hosted runners upload from the internet; access is Entra ID only
   #checkov:skip=CKV2_AZURE_33:No private endpoint - runners can't reach one; saves ~GBP 6/month
-  #checkov:skip=CKV2_AZURE_40:Shared keys stay enabled because azurerm refreshes data-plane settings with them; nobody is given keys and OAuth is the default
   #checkov:skip=CKV2_AZURE_41:No SAS tokens are issued
   #checkov:skip=CKV2_AZURE_1:Customer-managed keys need Key Vault; Microsoft-managed encryption is fine for config bundles
   #checkov:skip=CKV_AZURE_206:LRS is enough - bundles can be rebuilt by CI
   #checkov:skip=CKV_AZURE_33:No queues are used
-  name                            = substr(replace("st${local.name}${local.location_short}", "-", ""), 0, 24)
+  # Global name, letters and numbers only: st<org><workload><env><###>
+  name                            = "stgw${var.app_name}${var.environment}001"
   resource_group_name             = azurerm_resource_group.app.name
   location                        = azurerm_resource_group.app.location
   account_tier                    = "Standard"
@@ -21,6 +21,7 @@ resource "azurerm_storage_account" "deploy" {
   min_tls_version                 = "TLS1_2"
   https_traffic_only_enabled      = true
   allow_nested_items_to_be_public = false
+  shared_access_key_enabled       = false # the provider reads settings through ARM, so keys aren't needed
   default_to_oauth_authentication = true
   tags                            = local.tags
 

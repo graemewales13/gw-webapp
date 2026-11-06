@@ -1,8 +1,8 @@
 #--------------------------------------------------------------
-# Set by the landing zone bootstrap - don't add to tfvars
+# Set by the workflow from the GitHub environment - don't add to tfvars
 #--------------------------------------------------------------
 variable "subscription_id" {
-  description = "Landing zone subscription (gw-apps-prod). Workspace variable written by the bootstrap."
+  description = "The landing zone subscription (AZURE_SUBSCRIPTION_ID in the GitHub environment)."
   type        = string
 }
 
@@ -22,23 +22,28 @@ variable "app_name" {
 
 variable "environment" {
   type = string
+
+  validation {
+    condition     = contains(["nonprod", "prod"], var.environment)
+    error_message = "environment must be nonprod or prod."
+  }
 }
 
 variable "location" {
   type    = string
-  default = "uksouth"
+  default = "eastasia"
 }
 
 variable "tags" {
-  description = "Must include the tags the landing zone requires on resource groups (environment, owner)."
+  description = "CAF tags applied to every resource."
   type        = map(string)
 }
 
 #--------------------------------------------------------------
-# Landing zone network (owned by the platform; subnets are ours)
+# Landing zone network (owned by vending; subnets are ours)
 #--------------------------------------------------------------
 variable "spoke_vnet" {
-  description = "The spoke VNet the platform created for this landing zone."
+  description = "The spoke VNet vending created for this landing zone."
   type = object({
     name                = string
     resource_group_name = string
@@ -70,13 +75,12 @@ variable "frontend_port" {
 
 variable "api_vm_size" {
   description = <<-EOT
-    B1s: 1 vCPU, 1 GiB, free-tier eligible. New subscriptions get default
-    quota for the original B-series but 0 for the v2 B-series (Basv2 etc.),
-    which would need a quota request. B1s is announced for retirement, so
-    move to a v2 size once quota is in place.
+    B2pts_v2: 2 vCPU (Arm64), 1 GiB, in the landing zone's Bpsv2 quota.
+    This size doesn't support Trusted Launch, so the VM uses standard
+    security (the ALZ Trusted Launch policy only audits).
   EOT
   type        = string
-  default     = "Standard_B1s"
+  default     = "Standard_B2pts_v2"
 }
 
 variable "api_port" {
@@ -97,9 +101,14 @@ variable "postgres_version" {
 #--------------------------------------------------------------
 # GitHub Actions OIDC
 #--------------------------------------------------------------
-variable "github_repo" {
-  description = "owner/repo of this repository."
-  type        = string
+variable "github_repository" {
+  description = "This repository. GitHub's OIDC subject includes the owner and repo IDs: gh api repos/<owner>/<name> (.owner.id, .id)."
+  type = object({
+    owner    = string
+    owner_id = number
+    name     = string
+    repo_id  = number
+  })
 }
 
 variable "github_branch" {

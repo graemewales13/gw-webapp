@@ -1,0 +1,22 @@
+# Deploys the infrastructure when infra/ changes on main. Nonprod only for
+# now; prod is added as a second job (its environment needs approval).
+name: infra-cd
+
+on:
+  push:
+    branches: [main]
+    paths: ["infra/**", ".github/workflows/infra-cd*.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nonprod:
+    name: nonprod
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/infra-cd-template.yml
+    with:
+      environment: nonprod
