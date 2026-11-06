@@ -14,6 +14,10 @@ permissions:
 jobs:
   conventions:
     name: branch name and PR title
+    # Dependabot picks its own branch names and titles (some are over the
+    # 100-character limit because they include commit SHAs), so its PRs
+    # aren't checked.
+    if: ${{ !startsWith(github.head_ref, 'dependabot/') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check branch name and PR title
@@ -26,12 +30,7 @@ jobs:
           types='feat|fix|docs|ci|chore|refactor|test|perf|build|revert'
           ok=true
 
-          # Dependabot names its own branches (dependabot/<ecosystem>/...);
-          # its titles are still checked, using the prefixes in dependabot.yml.
-          bot=false
-          [[ "$BRANCH" == dependabot/* ]] && bot=true
-
-          if ! $bot && [[ ! "$BRANCH" =~ ^($types)/[a-z0-9][a-z0-9._-]*$ ]]; then
+          if [[ ! "$BRANCH" =~ ^($types)/[a-z0-9][a-z0-9._-]*$ ]]; then
             echo "::error::Branch '$BRANCH' must be <type>/<short-name>, e.g. feat/add-search (types: ${types//|/, }; lowercase, digits, . _ -)."
             ok=false
           fi
@@ -43,7 +42,7 @@ jobs:
 
           branch_type="${BRANCH%%/*}"
           title_type="${TITLE%%[(:!]*}"
-          if $ok && ! $bot && [[ "$branch_type" != "$title_type" ]]; then
+          if $ok && [[ "$branch_type" != "$title_type" ]]; then
             echo "::error::Branch type '$branch_type' doesn't match PR title type '$title_type'. Rename one so they agree."
             ok=false
           fi
