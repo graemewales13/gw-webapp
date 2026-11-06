@@ -71,12 +71,13 @@ jobs:
 
       # The deploy only counts if the public URL serves the page and the
       # whole path frontend -> API -> database works. Retries while the new
-      # revision starts (it scales from zero).
+      # revision starts (it scales from zero). "|| true" because the step
+      # runs with bash -e: a timeout means "not ready yet", not "give up".
       - name: Smoke test
         run: |
           for i in $(seq 1 24); do
-            page=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "https://$FQDN/healthz")
-            db=$(curl -s -o /dev/null -w "%{http_code}" -m 20 "https://$FQDN/api/health/db")
+            page=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "https://$FQDN/healthz" || true)
+            db=$(curl -s -o /dev/null -w "%{http_code}" -m 20 "https://$FQDN/api/health/db" || true)
             if [ "$page" = 200 ] && [ "$db" = 200 ]; then break; fi
             sleep 5
           done
