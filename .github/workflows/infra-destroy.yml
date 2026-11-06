@@ -1,0 +1,50 @@
+# Destroys everything in one environment. Manual only: the app is ephemeral,
+# and infra-cd.yml rebuilds it with a normal apply. Type the environment name
+# to confirm, so it can't be started by mistake.
+#
+# Uses the same template as infra-cd (plan, then apply that exact plan), with
+# destroy on. The template removes the backup vault the landing zone's policy
+# adds before Terraform runs.
+name: infra-destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to destroy"
+        type: choice
+        options: [nonprod]
+      confirm:
+        description: "Type the environment name again to confirm"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  confirm:
+    name: confirm
+    runs-on: ubuntu-latest
+    steps:
+      - name: check the confirmation matches
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "$ENVIRONMENT" ]; then
+            echo "::error::Confirmation '$CONFIRM' doesn't match '$ENVIRONMENT'. Nothing was destroyed."
+            exit 1
+          fi
+          echo "Destroying $ENVIRONMENT."
+
+  destroy:
+    name: ${{ inputs.environment }}
+    needs: confirm
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/infra-cd-template.yml
+    with:
+      environment: ${{ inputs.environment }}
+      destroy: true
