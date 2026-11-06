@@ -1,5 +1,6 @@
-# Checks for every pull request. Terraform plans and applies run in
-# infra-cd.yml from main; a plan on pull requests comes in a later change.
+# Checks for every pull request (and main). "CI Result" sums them up for the
+# branch ruleset. Terraform plans and applies run in infra-cd.yml from main;
+# a plan on pull requests comes in a later change.
 #
 # Actions are pinned to full commit SHAs (tag in the comment).
 name: ci
@@ -79,20 +80,35 @@ jobs:
       - run: ansible-lint site.yml
         working-directory: ansible
 
-  api:
-    name: api (byte-compile)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12" # Ubuntu 24.04's Python, as on the VM
-      - run: pip install --disable-pip-version-check -r api/requirements.txt
-      - run: python -m compileall -q api
+  app:
+    name: app
+    uses: ./.github/workflows/app-checks.yml
 
-  frontend:
-    name: frontend (docker build)
+  # Blocks PRs that add dependencies with known vulnerabilities.
+  dependency-review:
+    name: dependency review
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: docker build --pull -t frontend:ci frontend
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  # One fixed check name for the branch ruleset (main-requires-ci), however
+  # the jobs above change. always() so it fails, rather than skips, when a
+  # job fails: GitHub treats a skipped required check as passed.
+  result:
+    name: CI Result
+    if: always()
+    needs: [terraform, tflint, checkov, ansible, app, dependency-review]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs passed (or were skipped)
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            [ "$r" = "success" ] || [ "$r" = "skipped" ] || exit 1
+          done

@@ -24,8 +24,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The same checks as CI, so nothing untested is deployed.
+  checks:
+    name: checks
+    permissions:
+      contents: read
+    uses: ./.github/workflows/app-checks.yml
+    with:
+      api: true
+      frontend: false
+
   deploy:
     name: publish bundle, apply on VM
+    needs: checks
     runs-on: ubuntu-latest
     environment: nonprod
     steps:
@@ -41,7 +52,9 @@ jobs:
         env:
           STORAGE_ACCOUNT: ${{ vars.STORAGE_ACCOUNT }}
         run: |
-          tar -czf api-bundle.tar.gz ansible api
+          # Tests and dev-only files stay out of the bundle (and off the VM).
+          tar -czf api-bundle.tar.gz --exclude=api/tests --exclude=api/requirements-dev.txt \
+            --exclude=api/pyproject.toml --exclude='__pycache__' ansible api
           az storage blob upload --auth-mode login --account-name "$STORAGE_ACCOUNT" \
             --container-name deploy --name api-bundle.tar.gz --file api-bundle.tar.gz \
             --overwrite --metadata "commit=$GITHUB_SHA" --output none
@@ -58,3 +71,25 @@ jobs:
           echo "$out"
           { echo '```'; echo "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           grep -q DEPLOY_OK <<<"$out"
+
+      # The deploy only counts if the running API answers and can reach the
+      # database, as the real service user with its real hardening. Retries
+      # while the service restarts.
+      - name: Smoke test
+        env:
+          API_VM_NAME: ${{ vars.API_VM_NAME }}
+          RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+        run: |
+          out=$(az vm run-command invoke --resource-group "$RESOURCE_GROUP" --name "$API_VM_NAME" \
+            --command-id RunShellScript \
+            --scripts 'for i in $(seq 1 12); do
+                         api=$(curl -s -o /dev/null -w "%{http_code}" -m 5 localhost:8000/api/health)
+                         db=$(curl -s -o /dev/null -w "%{http_code}" -m 20 localhost:8000/api/health/db)
+                         if [ "$api" = 200 ] && [ "$db" = 200 ]; then echo SMOKE_OK; break; fi
+                         sleep 5
+                       done
+                       echo "api=$api db=$db"; curl -s -m 20 localhost:8000/api/health/db' \
+            --query "value[0].message" -o tsv)
+          echo "$out"
+          { echo '### Smoke test'; echo '```'; echo "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          grep -q SMOKE_OK <<<"$out"

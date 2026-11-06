@@ -23,8 +23,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The same checks as CI (hadolint, build, Trivy), so nothing untested is
+  # deployed.
+  checks:
+    name: checks
+    permissions:
+      contents: read
+    uses: ./.github/workflows/app-checks.yml
+    with:
+      api: false
+      frontend: true
+
   deploy:
     name: build, push, deploy
+    needs: checks
     runs-on: ubuntu-latest
     environment: nonprod
     env:
@@ -55,3 +67,18 @@ jobs:
           az containerapp update --name "$CONTAINER_APP_NAME" --resource-group "$RESOURCE_GROUP" --image "$IMAGE" --output none
           fqdn=$(az containerapp show --name "$CONTAINER_APP_NAME" --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
           echo "Deployed $IMAGE to https://$fqdn" >> "$GITHUB_STEP_SUMMARY"
+          echo "FQDN=$fqdn" >> "$GITHUB_ENV"
+
+      # The deploy only counts if the public URL serves the page and the
+      # whole path frontend -> API -> database works. Retries while the new
+      # revision starts (it scales from zero).
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 24); do
+            page=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "https://$FQDN/healthz")
+            db=$(curl -s -o /dev/null -w "%{http_code}" -m 20 "https://$FQDN/api/health/db")
+            if [ "$page" = 200 ] && [ "$db" = 200 ]; then break; fi
+            sleep 5
+          done
+          echo "frontend=$page database-through-api=$db" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$page" = 200 ] && [ "$db" = 200 ]
