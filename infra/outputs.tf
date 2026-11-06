@@ -1,3 +1,8 @@
+# Used by the destroy run to find policy-created resources to remove first.
+output "resource_group_name" {
+  value = azurerm_resource_group.app.name
+}
+
 output "frontend_url" {
   value = "https://${azurerm_container_app.frontend.ingress[0].fqdn}"
 }
