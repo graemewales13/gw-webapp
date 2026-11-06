@@ -8,7 +8,7 @@ FROM nginxinc/nginx-unprivileged:1.31-alpine
 # nginx image rebuild (Trivy fails the build on fixable critical CVEs).
 # Builds on different days can get different package versions; that's the
 # accepted trade-off. The container still runs as the non-root user 101.
-USER root
+USER 0
 # hadolint ignore=DL3017
 RUN apk upgrade --no-cache
 
