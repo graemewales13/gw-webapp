@@ -4,6 +4,14 @@
 # filling in API_UPSTREAM (set on the container app by Terraform).
 FROM nginxinc/nginx-unprivileged:1.31-alpine
 
+# Install Alpine's security fixes now rather than waiting for the next
+# nginx image rebuild (Trivy fails the build on fixable critical CVEs).
+# Builds on different days can get different package versions; that's the
+# accepted trade-off. The container still runs as the non-root user 101.
+USER root
+# hadolint ignore=DL3017
+RUN apk upgrade --no-cache
+
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY site/ /usr/share/nginx/html/
 
