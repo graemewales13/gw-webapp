@@ -62,10 +62,12 @@ resource "azurerm_private_endpoint" "postgres" {
     is_manual_connection           = false
   }
 
-  # Not yet registered in the platform's central
-  # privatelink.postgres.database.azure.com zone: that DNS zone group is a
-  # follow-up change. Until then the API can't resolve the database.
-  lifecycle {
-    ignore_changes = [private_dns_zone_group]
+  # Registers the endpoint in the platform's central
+  # privatelink.postgres.database.azure.com zone, which every spoke is
+  # linked to. Vending gives the deploy identity Private DNS Zone
+  # Contributor on that zone only.
+  private_dns_zone_group {
+    name                 = "default"
+    private_dns_zone_ids = [var.postgres_private_dns_zone_id]
   }
 }

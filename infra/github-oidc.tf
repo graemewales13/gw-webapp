@@ -1,6 +1,7 @@
 #==============================================================
 # Identity for the frontend and api deploy workflows. OIDC federation, no
-# secrets. Only workflows on the deploy branch can use it.
+# secrets. The workflows run in this environment's GitHub environment
+# (which only allows main), so that's what the identity trusts.
 #   frontend.yml: push images to ACR, roll the container app
 #   api.yml:      upload the config bundle, tell the VM to apply it
 #
@@ -15,13 +16,14 @@ resource "azurerm_user_assigned_identity" "github" {
   tags                = local.tags
 }
 
-# GitHub's immutable subject: owner and repo IDs as well as names.
+# GitHub's immutable subject: owner and repo IDs as well as names. A job in
+# an environment presents the environment, not the branch.
 resource "azurerm_federated_identity_credential" "github" {
-  name      = "github-${var.github_branch}"
+  name      = "github-${var.environment}"
   parent_id = azurerm_user_assigned_identity.github.id
   audience  = ["api://AzureADTokenExchange"]
   issuer    = "https://token.actions.githubusercontent.com"
-  subject   = "repo:${var.github_repository.owner}@${var.github_repository.owner_id}/${var.github_repository.name}@${var.github_repository.repo_id}:ref:refs/heads/${var.github_branch}"
+  subject   = "repo:${var.github_repository.owner}@${var.github_repository.owner_id}/${var.github_repository.name}@${var.github_repository.repo_id}:environment:${var.environment}"
 }
 
 resource "azurerm_role_assignment" "github" {
